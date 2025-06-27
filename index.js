@@ -1,10 +1,12 @@
-// index.js
-// Homebridge-SmartThings-AC-KM81: 승준 에어컨 전용 한글 커스텀 버전 (디버그 로그 강화)
+// Homebridge-SmartThings-AC-KM81: 승준 에어컨 전용 한글 커스텀 버전 (label normalize 처리)
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
 
 let Accessory, Service, Characteristic, UUIDGen;
+
+// 한글 등 문자열 NFC normalize + trim 함수
+const normalizeKorean = s => (s || '').normalize('NFC').trim();
 
 module.exports = (homebridge) => {
   Accessory = homebridge.platformAccessory;
@@ -40,13 +42,15 @@ class SmartThingsACPlatform {
 
   async discoverDevices() {
     const devices = await this.smartthings.getDevices();
-    this.log('[디버그] SmartThings에서 받아온 디바이스 label 목록:', devices.map(d => `"${d.label}"`).join(', '));
 
     let found = false;
     devices.forEach(device => {
-      // 실제 label(공백 등 포함)을 로그로 확인
-      this.log(`[디버그] 디바이스 label: [${device.label}] (ID: ${device.deviceId})`);
-      if (device.label === this.deviceLabel) {
+      const dLabel = normalizeKorean(device.label);
+      const tLabel = normalizeKorean(this.deviceLabel);
+
+      this.log(`[디버그] 디바이스 label: [${device.label}], normalized: [${dLabel}]`);
+      this.log(`[디버그] 설정 label: [${this.deviceLabel}], normalized: [${tLabel}]`);
+      if (dLabel === tLabel) {
         found = true;
         this.log(`[디버그] 매칭된 디바이스: ${device.label}, deviceId: ${device.deviceId}`);
         this.addOrUpdateAccessory(device);
