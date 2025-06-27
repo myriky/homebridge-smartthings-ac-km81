@@ -1,0 +1,10 @@
+{
+  "platforms": [
+    {
+      "platform": "SmartThingsAC-KM81",
+      "name": "승준 에어컨",
+      "token": "여기에_스마트싱스_토큰",
+      "deviceLabel": "승준 에어컨"
+    }
+  ]
+}
