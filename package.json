@@ -1,6 +1,6 @@
 {
   "name": "homebridge-smartthings-ac-km81",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "승준 에어컨에 최적화된 한글 커스텀 Homebridge SmartThings 에어컨 플러그인",
   "main": "index.js",
   "scripts": {
