@@ -1,9 +1,10 @@
 {
   "name": "homebridge-smartthings-ac-km81",
-  "version": "1.0.9",
-  "description": "승준 에어컨에 최적화된 한글 커스텀 Homebridge SmartThings 에어컨 플러그인",
+  "version": "1.1.0",
+  "description": "SmartThings 에어컨을 HomeKit에 연동하는 고기능 커스텀 플러그인",
   "main": "index.js",
   "scripts": {
+    "lint": "eslint .",
     "test": "echo \"No test specified\" && exit 0"
   },
   "author": "Km81",
@@ -19,8 +20,8 @@
     "km81"
   ],
   "engines": {
-    "homebridge": ">=1.4.0",
-    "node": ">=14.0.0"
+    "homebridge": ">=1.6.0",
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
@@ -28,5 +29,8 @@
   },
   "dependencies": {
     "axios": "^1.6.8"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
   }
 }
