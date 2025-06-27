@@ -1,7 +1,8 @@
-// Homebridge-SmartThings-AC-KM81 v1.1.1
+// Homebridge-SmartThings-AC-KM81 v1.1.2
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
+const pkg = require('./package.json'); // package.json을 불러와 버전 정보 사용
 
 let Accessory, Service, Characteristic, UUIDGen;
 
@@ -23,7 +24,6 @@ class SmartThingsACPlatform {
     this.api = api;
     this.accessories = [];
 
-    // 1. 설정값 검증 강화
     if (!config) {
       this.log.warn('설정이 없습니다. 플러그인을 비활성화합니다.');
       return;
@@ -53,7 +53,6 @@ class SmartThingsACPlatform {
     this.accessories.push(accessory);
   }
 
-  // 2. 다중 디바이스 지원 로직
   async discoverDevices() {
     this.log.info('SmartThings에서 장치 목록을 가져오는 중...');
     const stDevices = await this.smartthings.getDevices();
@@ -66,7 +65,6 @@ class SmartThingsACPlatform {
 
     this.log.info(`총 ${stDevices.length}개의 SmartThings 장치를 발견했습니다. 설정된 장치와 비교합니다.`);
 
-    // 설정 파일에 있는 장치들을 순회
     for (const configDevice of configDevices) {
       const targetLabel = normalizeKorean(configDevice.deviceLabel);
       const foundDevice = stDevices.find(stDevice => normalizeKorean(stDevice.label) === targetLabel);
@@ -82,27 +80,33 @@ class SmartThingsACPlatform {
 
   addOrUpdateAccessory(device) {
     const uuid = UUIDGen.generate(device.deviceId);
-    const existingAccessory = this.accessories.find(acc => acc.UUID === uuid);
+    let accessory = this.accessories.find(acc => acc.UUID === uuid);
 
-    if (existingAccessory) {
+    if (accessory) {
       this.log.info(`기존 액세서리 갱신: ${device.label}`);
-      existingAccessory.context.device = device;
-      this.setupHeaterCoolerService(existingAccessory);
+      accessory.context.device = device;
     } else {
       this.log.info(`새 액세서리 등록: ${device.label}`);
-      const accessory = new Accessory(device.label, uuid);
+      accessory = new Accessory(device.label, uuid);
       accessory.context.device = device;
-      this.setupHeaterCoolerService(accessory);
       this.api.registerPlatformAccessories('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', [accessory]);
       this.accessories.push(accessory);
     }
+
+    // 액세서리 정보 설정
+    accessory.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'Samsung')
+      .setCharacteristic(Characteristic.Model, 'AW06C7155WWA')
+      .setCharacteristic(Characteristic.SerialNumber, '0LC5PDOY601505H')
+      .setCharacteristic(Characteristic.FirmwareRevision, pkg.version); // package.json의 버전과 연동
+
+    // 서비스 설정 (HeaterCooler 등)
+    this.setupHeaterCoolerService(accessory);
   }
   
-  // 3. 코드 구조화 (헬퍼 함수) 및 리스너 중복 방지
   _bindCharacteristic({ service, characteristic, props, getter, setter }) {
     const char = service.getCharacteristic(characteristic);
     
-    // 기존 리스너 모두 제거하여 중복 방지
     char.removeAllListeners('get');
     char.removeAllListeners('set');
 
@@ -145,7 +149,6 @@ class SmartThingsACPlatform {
       setter: async (value) => await this.smartthings.setPower(deviceId, value === 1),
     });
 
-    // 4. 모드 상태 상세 반영
     this._bindCharacteristic({
       service,
       characteristic: Characteristic.CurrentHeaterCoolerState,
@@ -160,7 +163,7 @@ class SmartThingsACPlatform {
             return Characteristic.CurrentHeaterCoolerState.COOLING;
           case 'heat':
             return Characteristic.CurrentHeaterCoolerState.HEATING;
-          default: // fan, auto 등
+          default:
             return Characteristic.CurrentHeaterCoolerState.IDLE;
         }
       },
@@ -170,7 +173,7 @@ class SmartThingsACPlatform {
       service,
       characteristic: Characteristic.TargetHeaterCoolerState,
       props: { validValues: [Characteristic.TargetHeaterCoolerState.AUTO, Characteristic.TargetHeaterCoolerState.HEAT, Characteristic.TargetHeaterCoolerState.COOL] },
-      getter: async () => { // 목표 상태도 실제 상태 기반으로 추정
+      getter: async () => {
         const mode = await this.smartthings.getMode(deviceId);
         switch (mode) {
           case 'cool':
@@ -182,11 +185,11 @@ class SmartThingsACPlatform {
             return Characteristic.TargetHeaterCoolerState.AUTO;
         }
       },
-      setter: async (value) => { // 홈 앱의 목표 상태에 따라 실제 모드 변경 (커스텀 가능)
+      setter: async (value) => {
         let mode;
         switch (value) {
             case Characteristic.TargetHeaterCoolerState.COOL:
-                mode = 'dry'; // 기존 로직: '냉방' 선택 시 '제습'으로 동작
+                mode = 'dry';
                 break;
             case Characteristic.TargetHeaterCoolerState.HEAT:
                 mode = 'heat';
@@ -212,9 +215,6 @@ class SmartThingsACPlatform {
       getter: async () => await this.smartthings.getCoolingSetpoint(deviceId),
       setter: async (value) => await this.smartthings.setTemperature(deviceId, value),
     });
-    
-    // 난방 희망 온도 (필요 시)
-    // this._bindCharacteristic({ ... Characteristic.HeatingThresholdTemperature ... });
 
     this._bindCharacteristic({
       service,
