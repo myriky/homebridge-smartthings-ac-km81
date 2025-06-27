@@ -1,5 +1,5 @@
 // index.js
-// Homebridge-SmartThings-AC-KM81: 승준 에어컨 전용 한글 커스텀 버전
+// Homebridge-SmartThings-AC-KM81: 승준 에어컨 전용 한글 커스텀 버전 (디버그 로그 강화)
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -12,7 +12,6 @@ module.exports = (homebridge) => {
   Characteristic = homebridge.hap.Characteristic;
   UUIDGen = homebridge.hap.uuid;
 
-  // Dynamic Platform 등록
   homebridge.registerPlatform('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', SmartThingsACPlatform);
 };
 
@@ -22,7 +21,7 @@ class SmartThingsACPlatform {
     this.config = config;
     this.api = api;
     this.token = config.token;
-    this.deviceLabel = config.deviceLabel || '승준 에어컨'; // 기본값
+    this.deviceLabel = config.deviceLabel || '승준 에어컨';
 
     this.accessories = [];
     this.smartthings = new SmartThings(this.token, this.deviceLabel, this.log);
@@ -34,21 +33,28 @@ class SmartThingsACPlatform {
     }
   }
 
-  // 캐시 accessory가 로드될 때마다 호출됨 (필수)
   configureAccessory(accessory) {
     this.log(`캐시된 액세서리 불러오기: ${accessory.displayName}`);
     this.accessories.push(accessory);
-    // 이곳에서 액세서리 이벤트 핸들러를 재설정(옵션) 가능
   }
 
-  // "승준 에어컨"만 Homebridge에 등록
   async discoverDevices() {
     const devices = await this.smartthings.getDevices();
+    this.log('[디버그] SmartThings에서 받아온 디바이스 label 목록:', devices.map(d => `"${d.label}"`).join(', '));
+
+    let found = false;
     devices.forEach(device => {
+      // 실제 label(공백 등 포함)을 로그로 확인
+      this.log(`[디버그] 디바이스 label: [${device.label}] (ID: ${device.deviceId})`);
       if (device.label === this.deviceLabel) {
+        found = true;
+        this.log(`[디버그] 매칭된 디바이스: ${device.label}, deviceId: ${device.deviceId}`);
         this.addOrUpdateAccessory(device);
       }
     });
+    if (!found) {
+      this.log(`[경고] "${this.deviceLabel}"에 해당하는 디바이스를 SmartThings에서 찾지 못함!`);
+    }
   }
 
   addOrUpdateAccessory(device) {
