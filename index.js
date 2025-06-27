@@ -54,6 +54,7 @@ class SmartThingsACPlatform {
       accessory = new Accessory(device.label, uuid);
       accessory.context.device = device;
       this.api.registerPlatformAccessories('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', [accessory]);
+      this.accessories.push(accessory); // <--- 기존에 빠져있던 경우 추가
     }
 
     const service = accessory.getService(Service.HeaterCooler) ||
@@ -135,5 +136,10 @@ class SmartThingsACPlatform {
           callback(e);
         }
       });
+  }
+
+  // *** 이 부분이 필수! ***
+  accessories(callback) {
+    callback(this.accessories);
   }
 }
