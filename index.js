@@ -1,4 +1,4 @@
-// index.js
+// Homebridge-SmartThings-AC-KM81 v1.0.9
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -61,13 +61,13 @@ class SmartThingsACPlatform {
     if (!accessory) {
       accessory = new Accessory(device.label, uuid);
       accessory.context.device = device;
-      this.setupHeaterCoolerService(accessory); // 서비스 설정 분리
+      this.setupHeaterCoolerService(accessory);
       this.api.registerPlatformAccessories('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', [accessory]);
       this.accessories.push(accessory);
       this.log(`새 액세서리 등록: ${device.label}`);
     } else {
       accessory.context.device = device;
-      this.setupHeaterCoolerService(accessory); // 기존 액세서리도 서비스 갱신
+      this.setupHeaterCoolerService(accessory);
       this.log(`기존 액세서리 갱신: ${device.label}`);
     }
   }
@@ -98,24 +98,24 @@ class SmartThingsACPlatform {
       });
 
     // --- CurrentHeaterCoolerState (현재 기기 상태) ---
+    // 새로운 로직: 전원이 켜져 있으면 모드와 상관없이 'COOLING'으로 표시
     service.getCharacteristic(Characteristic.CurrentHeaterCoolerState)
       .on('get', async (callback) => {
         try {
-          const power = await this.smartthings.getPower(deviceId);
-          if (!power) {
-              callback(null, Characteristic.CurrentHeaterCoolerState.INACTIVE);
-              return;
-          }
-          const mode = await this.smartthings.getMode(deviceId);
-          // 'dry' 모드일 때 COOLING으로 표시 (기존 로직 유지)
-          if (mode === 'dry') {
+          // 에어컨의 전원 상태만 확인
+          const isPowerOn = await this.smartthings.getPower(deviceId);
+          
+          if (isPowerOn) {
+            // 전원이 켜져 있으면, 실제 모드와 관계없이 'COOLING' 상태로 홈 앱에 보고
+            this.log(`전원이 켜져 있으므로 'COOLING' 상태로 보고합니다.`);
             callback(null, Characteristic.CurrentHeaterCoolerState.COOLING);
           } else {
-            // 다른 모드도 필요 시 여기에 추가 가능
-            callback(null, Characteristic.CurrentHeaterCoolerState.IDLE); // 꺼져있지 않고, 냉방도 아닐 때
+            // 전원이 꺼져 있으면, 'INACTIVE' 상태로 홈 앱에 보고
+            this.log(`전원이 꺼져 있으므로 'INACTIVE' 상태로 보고합니다.`);
+            callback(null, Characteristic.CurrentHeaterCoolerState.INACTIVE);
           }
         } catch (e) {
-          this.log('현재 모드 조회 오류:', e);
+          this.log('현재 기기 상태(CurrentHeaterCoolerState) 조회 오류:', e);
           callback(e);
         }
       });
