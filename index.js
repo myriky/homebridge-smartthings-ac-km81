@@ -1,7 +1,5 @@
 // index.js
 // Homebridge-SmartThings-AC-KM81: 승준 에어컨 전용 한글 커스텀 버전
-// 주요 기능: "승준 에어컨"만 등록, 홈킷 냉방은 제습 매핑, 무풍/자동청소/온도 18~30/한글화
-
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -14,39 +12,46 @@ module.exports = (homebridge) => {
   Characteristic = homebridge.hap.Characteristic;
   UUIDGen = homebridge.hap.uuid;
 
-  homebridge.registerPlatform('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', SmartThingsACPlatform, true);
+  // Dynamic Platform 등록
+  homebridge.registerPlatform('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', SmartThingsACPlatform);
 };
 
-// 한글: 플랫폼 클래스
 class SmartThingsACPlatform {
   constructor(log, config, api) {
     this.log = log;
     this.config = config;
     this.api = api;
     this.token = config.token;
-    this.deviceLabel = config.deviceLabel || '승준 에어컨'; // 한글: 기본값
+    this.deviceLabel = config.deviceLabel || '승준 에어컨'; // 기본값
 
     this.accessories = [];
     this.smartthings = new SmartThings(this.token, this.deviceLabel, this.log);
 
     if (api) {
-      this.api.on('didFinishLaunching', () => {
-        this.discoverDevices();
+      this.api.on('didFinishLaunching', async () => {
+        await this.discoverDevices();
       });
     }
   }
 
-  // 한글: "승준 에어컨"만 Homebridge에 등록
+  // 캐시 accessory가 로드될 때마다 호출됨 (필수)
+  configureAccessory(accessory) {
+    this.log(`캐시된 액세서리 불러오기: ${accessory.displayName}`);
+    this.accessories.push(accessory);
+    // 이곳에서 액세서리 이벤트 핸들러를 재설정(옵션) 가능
+  }
+
+  // "승준 에어컨"만 Homebridge에 등록
   async discoverDevices() {
     const devices = await this.smartthings.getDevices();
     devices.forEach(device => {
       if (device.label === this.deviceLabel) {
-        this.addAccessory(device);
+        this.addOrUpdateAccessory(device);
       }
     });
   }
 
-  addAccessory(device) {
+  addOrUpdateAccessory(device) {
     const uuid = UUIDGen.generate(device.deviceId);
     let accessory = this.accessories.find(acc => acc.UUID === uuid);
 
@@ -54,21 +59,25 @@ class SmartThingsACPlatform {
       accessory = new Accessory(device.label, uuid);
       accessory.context.device = device;
       this.api.registerPlatformAccessories('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', [accessory]);
-      this.accessories.push(accessory); // <--- 기존에 빠져있던 경우 추가
+      this.accessories.push(accessory);
+      this.log(`새 액세서리 등록: ${device.label}`);
+    } else {
+      accessory.context.device = device;
+      this.log(`기존 액세서리 갱신: ${device.label}`);
     }
 
+    this.setupHeaterCoolerService(accessory, device);
+  }
+
+  setupHeaterCoolerService(accessory, device) {
     const service = accessory.getService(Service.HeaterCooler) ||
       accessory.addService(Service.HeaterCooler, device.label);
 
-    // 한글: 홈킷 냉방 모드를 "제습"에 매핑 (냉방만 남기고, 자동/난방 제거)
+    // 전원 제어
     service.getCharacteristic(Characteristic.Active)
       .on('set', async (value, callback) => {
         try {
-          if (value) {
-            await this.smartthings.setPower(device.deviceId, true);
-          } else {
-            await this.smartthings.setPower(device.deviceId, false);
-          }
+          await this.smartthings.setPower(device.deviceId, !!value);
           callback();
         } catch (e) {
           this.log('전원 제어 오류:', e);
@@ -76,22 +85,27 @@ class SmartThingsACPlatform {
         }
       });
 
-    // 한글: 냉방 모드(실제 제습)만 사용
+    // 현재 모드: 제습만 "냉방"으로 매핑
     service.getCharacteristic(Characteristic.CurrentHeaterCoolerState)
       .on('get', async callback => {
-        const mode = await this.smartthings.getMode(device.deviceId);
-        if (mode === 'dry') {
-          callback(null, Characteristic.CurrentHeaterCoolerState.COOLING);
-        } else {
-          callback(null, Characteristic.CurrentHeaterCoolerState.INACTIVE);
+        try {
+          const mode = await this.smartthings.getMode(device.deviceId);
+          if (mode === 'dry') {
+            callback(null, Characteristic.CurrentHeaterCoolerState.COOLING);
+          } else {
+            callback(null, Characteristic.CurrentHeaterCoolerState.INACTIVE);
+          }
+        } catch (e) {
+          this.log('모드 조회 오류:', e);
+          callback(e);
         }
       });
 
+    // 타겟 모드: 냉방(실제 제습)만 노출
     service.getCharacteristic(Characteristic.TargetHeaterCoolerState)
-      .setProps({ validValues: [Characteristic.TargetHeaterCoolerState.COOL] }) // 냉방만
+      .setProps({ validValues: [Characteristic.TargetHeaterCoolerState.COOL] })
       .on('set', async (value, callback) => {
         try {
-          // 한글: 항상 "제습"으로 설정
           await this.smartthings.setMode(device.deviceId, 'dry');
           callback();
         } catch (e) {
@@ -100,7 +114,7 @@ class SmartThingsACPlatform {
         }
       });
 
-    // 한글: 온도 18~30도, 1도 단위로 제한
+    // 온도 설정: 18~30도, 1도 단위
     service.getCharacteristic(Characteristic.CoolingThresholdTemperature)
       .setProps({ minValue: 18, maxValue: 30, minStep: 1 })
       .on('set', async (value, callback) => {
@@ -113,7 +127,7 @@ class SmartThingsACPlatform {
         }
       });
 
-    // 한글: 무풍(스윙)모드 매핑 (HomeKit 스윙모드 <-> SmartThings 무풍)
+    // 무풍(스윙)모드 매핑
     service.getCharacteristic(Characteristic.SwingMode)
       .on('set', async (value, callback) => {
         try {
@@ -125,7 +139,7 @@ class SmartThingsACPlatform {
         }
       });
 
-    // 한글: 잠금(자동청소) 매핑 (HomeKit 잠금 <-> SmartThings 자동청소)
+    // 잠금(자동청소) 매핑
     service.getCharacteristic(Characteristic.LockPhysicalControls)
       .on('set', async (value, callback) => {
         try {
@@ -136,10 +150,5 @@ class SmartThingsACPlatform {
           callback(e);
         }
       });
-  }
-
-  // *** 이 부분이 필수! ***
-  accessories(callback) {
-    callback(this.accessories);
   }
 }
