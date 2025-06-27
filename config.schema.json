@@ -1,10 +1,46 @@
 {
-  "platforms": [
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "플랫폼 이름",
+        "type": "string",
+        "default": "SmartThings AC",
+        "required": true
+      },
+      "token": {
+        "title": "SmartThings 개인용 액세스 토큰 (PAT)",
+        "type": "string",
+        "description": "SmartThings 개발자 워크스페이스에서 발급받은 토큰. l:devices, r:devices:*, x:devices:* 권한이 필요합니다.",
+        "required": true
+      },
+      "devices": {
+        "title": "연동할 에어컨 장치",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "deviceLabel": {
+              "title": "에어컨 이름 (SmartThings 레이블)",
+              "type": "string",
+              "description": "SmartThings 앱에 등록된 에어컨의 이름과 정확히 일치해야 합니다.",
+              "required": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": [
+    "name",
+    "token",
     {
-      "platform": "SmartThingsAC-KM81",
-      "name": "승준 에어컨",
-      "token": "여기에_스마트싱스_토큰",
-      "deviceLabel": "승준 에어컨"
+      "key": "devices",
+      "type": "array",
+      "title": "에어컨 목록",
+      "items": [
+        "devices[].deviceLabel"
+      ]
     }
   ]
 }
