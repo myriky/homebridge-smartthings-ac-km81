@@ -1,46 +1,51 @@
 # Homebridge SmartThings AC (KM81 Custom)
 
-`homebridge-smartthings-ac-km81`은 삼성 에어컨을 SmartThings API를 통해 HomeKit에 연동하기 위한 Homebridge 플러그인입니다. 특정 사용 환경에 맞춰 고도로 커스터마이징된 버전입니다.
+[![npm version](https://badge.fury.io/js/homebridge-smartthings-ac-km81.svg)](https://badge.fury.io/js/homebridge-smartthings-ac-km81)
+
+`homebridge-smartthings-ac-km81`은 삼성 에어컨을 SmartThings API를 통해 HomeKit에 연동하기 위한 Homebridge 플러그인입니다. 여러 대의 에어컨을 지원하며, 다양한 커스텀 기능을 제공하여 HomeKit 경험을 향상시킵니다.
 
 ## 주요 기능
 
-* **특정 에어컨 연동**: 설정 파일에 지정된 `deviceLabel`과 일치하는 SmartThings 장치 하나만 HomeKit에 추가합니다.
-* **상태 표시 최적화**: SmartThings에서 에어컨이 어떤 모드(냉방, 제습, 송풍 등)로 작동하든, 전원이 켜져 있으면 홈 앱에서는 항상 '냉방' 상태로 표시하여 상태를 직관적으로 파악할 수 있습니다.
-* **핵심 기능 매핑**:
-    * 홈 앱의 **'냉방'** 버튼 -> 실제 에어컨의 **'제습(dry)'** 모드를 실행합니다.
-    * 홈 앱의 **'스윙'** 토글 -> 실제 에어컨의 **'무풍(Wind-Free)'** 기능을 제어합니다.
-    * 홈 앱의 **'잠금'** 토글 -> 실제 에어컨의 **'자동 청소'** 기능을 제어합니다.
-* **안정적인 API 통신**: SmartThings API 요청을 효율적으로 관리하여, 서버의 과도한 요청(Rate Limit) 오류를 방지하고 안정적인 상태 업데이트를 보장합니다.
+* **다중 디바이스 지원**: 여러 대의 에어컨을 `config.json`에 등록하여 한 번에 관리할 수 있습니다.
+* **상세한 상태 반영**: SmartThings 에어컨의 실제 운전 모드(`cool`, `dry`, `heat`, `fan`, `auto`)를 분석하여 홈 앱의 `냉방`, `난방`, `자동`, `쉼` 상태에 정확하게 반영합니다.
+* **고유 기능 커스텀 매핑**:
+    * 홈 앱의 **'냉방'** 버튼 → 실제 에어컨의 **'제습(dry)'** 모드를 실행합니다. (여름철 효율적인 사용을 위한 커스텀 로직)
+    * 홈 앱의 **'스윙'** 토글 → 실제 에어컨의 **'무풍(Wind-Free)'** 기능을 제어합니다.
+    * 홈 앱의 **'잠금'** 토글 → 실제 에어컨의 **'자동 청소'** 기능을 제어합니다.
+* **안정적인 API 통신**: API 요청을 효율적으로 관리하고 캐싱하여, 서버의 과도한 요청(Rate Limit) 오류를 방지하고 안정적인 상태 업데이트를 보장합니다.
+* **GUI 설정 지원**: Homebridge UI의 GUI 환경에서 설정을 쉽게 입력하고 관리할 수 있도록 `config.schema.json`을 지원합니다.
 
 ## 설치
 
-1.  Homebridge가 설치된 환경에서 다음 명령어를 실행합니다.
+1.  Homebridge가 설치된 환경의 터미널에서 아래 명령어를 실행하여 플러그인을 설치합니다.
+    ```shell
+    npm install -g homebridge-smartthings-ac-km81
     ```
-    npm install -g /path/to/your/plugin/folder
-    ```
-    (이 플러그인은 npm에 공개되지 않았으므로 로컬 경로로 설치해야 합니다.)
-
-2.  Homebridge `config.json` 파일에 아래와 같이 플랫폼 설정을 추가합니다.
+2.  Homebridge `config.json` 파일의 `platforms` 배열에 아래 설정을 추가합니다. Homebridge UI를 사용하면 더 쉽게 설정할 수 있습니다.
 
 ## 설정 (`config.json`)
 
 ```json
 {
-  "platforms": [
+  "platform": "SmartThingsAC-KM81",
+  "name": "SmartThings AC",
+  "token": "YOUR_SMARTTHINGS_PERSONAL_ACCESS_TOKEN",
+  "devices": [
     {
-      "platform": "SmartThingsAC-KM81",
-      "name": "승준 에어컨",
-      "token": "YOUR_SMARTTHINGS_PERSONAL_ACCESS_TOKEN",
-      "deviceLabel": "승준 에어컨"
+      "deviceLabel": "거실 에어컨"
+    },
+    {
+      "deviceLabel": "안방 에어컨"
     }
   ]
 }
 ```
 
 * `platform`: **"SmartThingsAC-KM81"** (고정값)
-* `name`: Homebridge 로그에 표시될 플랫폼 이름 (자유롭게 지정)
+* `name`: Homebridge 로그에 표시될 플랫폼 이름 (예: "SmartThings AC")
 * `token`: [SmartThings 개발자 페이지](https://account.smartthings.com/tokens)에서 발급받은 개인용 액세스 토큰. **반드시 `l:devices`, `r:devices:*`, `x:devices:*` 권한이 모두 포함되어야 합니다.**
-* `deviceLabel`: 연동할 에어컨의 SmartThings 상의 이름. **띄어쓰기까지 정확하게 일치해야 합니다.**
+* `devices`: 연동할 에어컨 목록 (배열).
+    * `deviceLabel`: 연동할 에어컨의 SmartThings 상의 이름. **띄어쓰기까지 정확하게 일치해야 합니다.**
 
 ## 저작권 및 라이선스
 
