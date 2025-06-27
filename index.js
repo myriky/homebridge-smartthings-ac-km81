@@ -1,4 +1,4 @@
-// Homebridge-SmartThings-AC-KM81 v1.0.9
+// Homebridge-SmartThings-AC-KM81 v1.1.0
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -21,54 +21,115 @@ class SmartThingsACPlatform {
     this.log = log;
     this.config = config;
     this.api = api;
-    this.token = config.token;
-    this.deviceLabel = config.deviceLabel || '승준 에어컨';
-
     this.accessories = [];
-    this.smartthings = new SmartThings(this.token, this.deviceLabel, this.log);
 
-    if (api) {
+    // 1. 설정값 검증 강화
+    if (!config) {
+      this.log.warn('설정이 없습니다. 플러그인을 비활성화합니다.');
+      return;
+    }
+    if (!config.token) {
+      this.log.error('SmartThings 토큰이 설정되지 않았습니다. config.json을 확인해주세요.');
+      return;
+    }
+    if (!config.devices || !Array.isArray(config.devices) || config.devices.length === 0) {
+      this.log.error('연동할 디바이스가 설정되지 않았습니다. config.json의 "devices" 배열을 확인해주세요.');
+      return;
+    }
+
+    this.smartthings = new SmartThings(config.token, this.log);
+
+    if (this.api) {
+      this.log.info('SmartThings AC 플랫폼 초기화 중...');
       this.api.on('didFinishLaunching', async () => {
+        this.log.info('Homebridge 실행 완료. 장치 검색을 시작합니다.');
         await this.discoverDevices();
       });
     }
   }
 
   configureAccessory(accessory) {
-    this.log(`캐시된 액세서리 불러오기: ${accessory.displayName}`);
+    this.log.info(`캐시된 액세서리 불러오기: ${accessory.displayName}`);
     this.accessories.push(accessory);
   }
 
+  // 2. 다중 디바이스 지원 로직
   async discoverDevices() {
-    const devices = await this.smartthings.getDevices();
-    let found = false;
-    devices.forEach(device => {
-      if (normalizeKorean(device.label) === normalizeKorean(this.deviceLabel)) {
-        found = true;
-        this.log(`매칭된 디바이스 발견: ${device.label} (ID: ${device.deviceId})`);
-        this.addOrUpdateAccessory(device);
+    this.log.info('SmartThings에서 장치 목록을 가져오는 중...');
+    const stDevices = await this.smartthings.getDevices();
+    const configDevices = this.config.devices;
+
+    if (stDevices.length === 0) {
+        this.log.warn('SmartThings에서 어떤 장치도 찾지 못했습니다. 토큰이나 연결을 확인해주세요.');
+        return;
+    }
+
+    this.log.info(`총 ${stDevices.length}개의 SmartThings 장치를 발견했습니다. 설정된 장치와 비교합니다.`);
+
+    // 설정 파일에 있는 장치들을 순회
+    for (const configDevice of configDevices) {
+      const targetLabel = normalizeKorean(configDevice.deviceLabel);
+      const foundDevice = stDevices.find(stDevice => normalizeKorean(stDevice.label) === targetLabel);
+
+      if (foundDevice) {
+        this.log.info(`'${configDevice.deviceLabel}' 장치를 찾았습니다. HomeKit에 추가/갱신합니다.`);
+        this.addOrUpdateAccessory(foundDevice);
+      } else {
+        this.log.warn(`'${configDevice.deviceLabel}'에 해당하는 장치를 SmartThings에서 찾지 못했습니다.`);
       }
-    });
-    if (!found) {
-      this.log(`[경고] "${this.deviceLabel}"에 해당하는 디바이스를 SmartThings에서 찾지 못했습니다!`);
     }
   }
 
   addOrUpdateAccessory(device) {
     const uuid = UUIDGen.generate(device.deviceId);
-    let accessory = this.accessories.find(acc => acc.UUID === uuid);
+    const existingAccessory = this.accessories.find(acc => acc.UUID === uuid);
 
-    if (!accessory) {
-      accessory = new Accessory(device.label, uuid);
+    if (existingAccessory) {
+      this.log.info(`기존 액세서리 갱신: ${device.label}`);
+      existingAccessory.context.device = device;
+      this.setupHeaterCoolerService(existingAccessory);
+    } else {
+      this.log.info(`새 액세서리 등록: ${device.label}`);
+      const accessory = new Accessory(device.label, uuid);
       accessory.context.device = device;
       this.setupHeaterCoolerService(accessory);
       this.api.registerPlatformAccessories('homebridge-smartthings-ac-km81', 'SmartThingsAC-KM81', [accessory]);
       this.accessories.push(accessory);
-      this.log(`새 액세서리 등록: ${device.label}`);
-    } else {
-      accessory.context.device = device;
-      this.setupHeaterCoolerService(accessory);
-      this.log(`기존 액세서리 갱신: ${device.label}`);
+    }
+  }
+  
+  // 3. 코드 구조화 (헬퍼 함수) 및 리스너 중복 방지
+  _bindCharacteristic({ service, characteristic, props, getter, setter }) {
+    const char = service.getCharacteristic(characteristic);
+    
+    // 기존 리스너 모두 제거하여 중복 방지
+    char.removeAllListeners('get');
+    char.removeAllListeners('set');
+
+    if (props) {
+      char.setProps(props);
+    }
+    
+    char.on('get', async (callback) => {
+      try {
+        const value = await getter();
+        callback(null, value);
+      } catch (e) {
+        this.log.error(`[${service.displayName}] ${characteristic.name} GET 오류:`, e.message);
+        callback(e);
+      }
+    });
+
+    if (setter) {
+      char.on('set', async (value, callback) => {
+        try {
+          await setter(value);
+          callback(null);
+        } catch (e) {
+          this.log.error(`[${service.displayName}] ${characteristic.name} SET 오류:`, e.message);
+          callback(e);
+        }
+      });
     }
   }
 
@@ -77,137 +138,96 @@ class SmartThingsACPlatform {
     const service = accessory.getService(Service.HeaterCooler) ||
       accessory.addService(Service.HeaterCooler, accessory.displayName);
 
-    // --- Active (전원) ---
-    service.getCharacteristic(Characteristic.Active)
-      .on('get', async (callback) => {
-        try {
-          const power = await this.smartthings.getPower(deviceId);
-          callback(null, power ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE);
-        } catch (e) {
-          callback(e);
-        }
-      })
-      .on('set', async (value, callback) => {
-        try {
-          await this.smartthings.setPower(deviceId, value === Characteristic.Active.ACTIVE);
-          callback();
-        } catch (e) {
-          this.log('전원 제어 오류:', e);
-          callback(e);
-        }
-      });
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.Active,
+      getter: async () => await this.smartthings.getPower(deviceId) ? 1 : 0,
+      setter: async (value) => await this.smartthings.setPower(deviceId, value === 1),
+    });
 
-    // --- CurrentHeaterCoolerState (현재 기기 상태) ---
-    // 새로운 로직: 전원이 켜져 있으면 모드와 상관없이 'COOLING'으로 표시
-    service.getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-      .on('get', async (callback) => {
-        try {
-          // 에어컨의 전원 상태만 확인
-          const isPowerOn = await this.smartthings.getPower(deviceId);
-          
-          if (isPowerOn) {
-            // 전원이 켜져 있으면, 실제 모드와 관계없이 'COOLING' 상태로 홈 앱에 보고
-            this.log(`전원이 켜져 있으므로 'COOLING' 상태로 보고합니다.`);
-            callback(null, Characteristic.CurrentHeaterCoolerState.COOLING);
-          } else {
-            // 전원이 꺼져 있으면, 'INACTIVE' 상태로 홈 앱에 보고
-            this.log(`전원이 꺼져 있으므로 'INACTIVE' 상태로 보고합니다.`);
-            callback(null, Characteristic.CurrentHeaterCoolerState.INACTIVE);
-          }
-        } catch (e) {
-          this.log('현재 기기 상태(CurrentHeaterCoolerState) 조회 오류:', e);
-          callback(e);
+    // 4. 모드 상태 상세 반영
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.CurrentHeaterCoolerState,
+      getter: async () => {
+        if (!await this.smartthings.getPower(deviceId)) {
+          return Characteristic.CurrentHeaterCoolerState.INACTIVE;
         }
-      });
-      
-    // --- TargetHeaterCoolerState (목표 기기 상태) ---
-    service.getCharacteristic(Characteristic.TargetHeaterCoolerState)
-      .setProps({ validValues: [Characteristic.TargetHeaterCoolerState.COOL] })
-      .on('set', async (value, callback) => {
-        try {
-          // COOL을 설정하면 'dry' 모드로 동작 (기존 로직 유지)
-          await this.smartthings.setMode(deviceId, 'dry');
-          callback();
-        } catch (e) {
-          this.log('모드 변경 오류:', e);
-          callback(e);
+        const mode = await this.smartthings.getMode(deviceId);
+        switch (mode) {
+          case 'cool':
+          case 'dry':
+            return Characteristic.CurrentHeaterCoolerState.COOLING;
+          case 'heat':
+            return Characteristic.CurrentHeaterCoolerState.HEATING;
+          default: // fan, auto 등
+            return Characteristic.CurrentHeaterCoolerState.IDLE;
         }
-      });
+      },
+    });
 
-    // --- CurrentTemperature (현재 온도) ---
-    service.getCharacteristic(Characteristic.CurrentTemperature)
-      .on('get', async (callback) => {
-        try {
-          const temp = await this.smartthings.getCurrentTemperature(deviceId);
-          callback(null, temp);
-        } catch(e) {
-          this.log('현재 온도 조회 오류:', e);
-          callback(e);
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.TargetHeaterCoolerState,
+      props: { validValues: [Characteristic.TargetHeaterCoolerState.AUTO, Characteristic.TargetHeaterCoolerState.HEAT, Characteristic.TargetHeaterCoolerState.COOL] },
+      getter: async () => { // 목표 상태도 실제 상태 기반으로 추정
+        const mode = await this.smartthings.getMode(deviceId);
+        switch (mode) {
+          case 'cool':
+          case 'dry':
+            return Characteristic.TargetHeaterCoolerState.COOL;
+          case 'heat':
+            return Characteristic.TargetHeaterCoolerState.HEAT;
+          default:
+            return Characteristic.TargetHeaterCoolerState.AUTO;
         }
-      });
+      },
+      setter: async (value) => { // 홈 앱의 목표 상태에 따라 실제 모드 변경 (커스텀 가능)
+        let mode;
+        switch (value) {
+            case Characteristic.TargetHeaterCoolerState.COOL:
+                mode = 'dry'; // 기존 로직: '냉방' 선택 시 '제습'으로 동작
+                break;
+            case Characteristic.TargetHeaterCoolerState.HEAT:
+                mode = 'heat';
+                break;
+            case Characteristic.TargetHeaterCoolerState.AUTO:
+                mode = 'auto';
+                break;
+        }
+        await this.smartthings.setMode(deviceId, mode);
+      },
+    });
 
-    // --- CoolingThresholdTemperature (냉방 설정 온도) ---
-    service.getCharacteristic(Characteristic.CoolingThresholdTemperature)
-      .setProps({ minValue: 18, maxValue: 30, minStep: 1 })
-      .on('get', async (callback) => {
-          try {
-              const temp = await this.smartthings.getCoolingSetpoint(deviceId);
-              callback(null, temp);
-          } catch(e) {
-              this.log('설정 온도 조회 오류:', e);
-              callback(e);
-          }
-      })
-      .on('set', async (value, callback) => {
-        try {
-          await this.smartthings.setTemperature(deviceId, value);
-          callback();
-        } catch (e) {
-          this.log('온도 설정 오류:', e);
-          callback(e);
-        }
-      });
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.CurrentTemperature,
+      getter: async () => await this.smartthings.getCurrentTemperature(deviceId),
+    });
 
-    // --- SwingMode (무풍 모드) ---
-    service.getCharacteristic(Characteristic.SwingMode)
-      .on('get', async (callback) => {
-          try {
-              const enabled = await this.smartthings.getWindFree(deviceId);
-              callback(null, enabled ? Characteristic.SwingMode.SWING_ENABLED : Characteristic.SwingMode.SWING_DISABLED);
-          } catch(e) {
-              this.log('무풍(스윙) 조회 오류:', e);
-              callback(e);
-          }
-      })
-      .on('set', async (value, callback) => {
-        try {
-          await this.smartthings.setWindFree(deviceId, value === Characteristic.SwingMode.SWING_ENABLED);
-          callback();
-        } catch (e) {
-          this.log('무풍(스윙) 설정 오류:', e);
-          callback(e);
-        }
-      });
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.CoolingThresholdTemperature,
+      props: { minValue: 18, maxValue: 30, minStep: 1 },
+      getter: async () => await this.smartthings.getCoolingSetpoint(deviceId),
+      setter: async (value) => await this.smartthings.setTemperature(deviceId, value),
+    });
+    
+    // 난방 희망 온도 (필요 시)
+    // this._bindCharacteristic({ ... Characteristic.HeatingThresholdTemperature ... });
 
-    // --- LockPhysicalControls (자동청소 모드) ---
-    service.getCharacteristic(Characteristic.LockPhysicalControls)
-      .on('get', async (callback) => {
-          try {
-              const enabled = await this.smartthings.getAutoClean(deviceId);
-              callback(null, enabled ? Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED : Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED);
-          } catch (e) {
-              this.log('자동청소 조회 오류:', e);
-              callback(e);
-          }
-      })
-      .on('set', async (value, callback) => {
-        try {
-          await this.smartthings.setAutoClean(deviceId, value === Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED);
-          callback();
-        } catch (e) {
-          this.log('자동청소 설정 오류:', e);
-          callback(e);
-        }
-      });
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.SwingMode,
+      getter: async () => await this.smartthings.getWindFree(deviceId) ? 1 : 0,
+      setter: async (value) => await this.smartthings.setWindFree(deviceId, value === 1),
+    });
+
+    this._bindCharacteristic({
+      service,
+      characteristic: Characteristic.LockPhysicalControls,
+      getter: async () => await this.smartthings.getAutoClean(deviceId) ? 1 : 0,
+      setter: async (value) => await this.smartthings.setAutoClean(deviceId, value === 1),
+    });
   }
 }
