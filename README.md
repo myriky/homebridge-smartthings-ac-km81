@@ -1,0 +1,1 @@
+# homebridge-smartthings-ac-km81
