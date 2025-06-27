@@ -1,4 +1,4 @@
-// Homebridge-SmartThings-AC-KM81 v1.1.0
+// Homebridge-SmartThings-AC-KM81 v1.1.1
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
