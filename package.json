@@ -16,9 +16,9 @@
     "airconditioner",
     "samsung",
     "ac",
-    "oauth2",
     "korean",
-    "km81"
+    "km81",
+    "oauth"
   ],
   "engines": {
     "homebridge": ">=1.6.0",
@@ -29,7 +29,7 @@
     "url": "https://github.com/Km81/homebridge-smartthings-ac.git"
   },
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^1.7.2",
     "lru-cache": "^10.2.2"
   },
   "devDependencies": {
