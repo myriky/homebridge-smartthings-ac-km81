@@ -1,10 +1,11 @@
-// index.js v2.1.0
+// index.js v2.1.1 (Webhook 인증 지원)
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
 const pkg = require('./package.json');
 const http = require('http');
 const url = require('url');
+const https = require('https'); // https 모듈 추가
 
 let Accessory, Service, Characteristic, UUIDGen;
 
@@ -61,47 +62,79 @@ class SmartThingsACPlatform {
         this.server.close();
     }
     
-    const uri = new URL(this.config.redirectUri);
-    const port = uri.port;
+    // config.redirectUri에서 포트와 경로를 분리해서 사용합니다.
+    // 내부 리스닝 포트는 8999로 고정하거나, 다른 방식으로 설정할 수 있습니다.
+    const listenPort = 8999; 
 
     this.server = http.createServer(async (req, res) => {
-        const reqUrl = url.parse(req.url, true);
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+            const reqUrl = url.parse(req.url, true);
+            const reqPath = reqUrl.pathname;
 
-        if (reqUrl.pathname === uri.pathname) {
-            const code = reqUrl.query.code;
-            if (code) {
-                res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
-                res.end('<h1>인증 성공!</h1><p>SmartThings 인증에 성공했습니다. 이 창을 닫고 Homebridge를 재시작해주세요.</p>');
-                this.log.info('인증 코드를 성공적으로 수신했습니다. 토큰을 발급받습니다...');
-                
+            // OAuth 콜백 처리 (GET 요청)
+            if (req.method === 'GET') {
+                const code = reqUrl.query.code;
+                if (code) {
+                    res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
+                    res.end('<h1>인증 성공!</h1><p>SmartThings 인증에 성공했습니다. 이 창을 닫고 Homebridge를 재시작해주세요.</p>');
+                    this.log.info('인증 코드를 성공적으로 수신했습니다. 토큰을 발급받습니다...');
+                    try {
+                        await this.smartthings.getInitialTokens(code);
+                        this.log.info('최초 토큰 발급 완료! Homebridge를 재시작하면 장치가 연동됩니다.');
+                        this.server.close();
+                    } catch(e) { this.log.error('수신된 코드로 토큰 발급 중 오류 발생:', e.message); }
+                } else {
+                    res.writeHead(400, {'Content-Type': 'text/html; charset=utf-8'});
+                    res.end('<h1>인증 실패</h1><p>URL에서 인증 코드를 찾을 수 없습니다.</p>');
+                }
+            // Webhook 소유권 확인 처리 (POST 요청)
+            } else if (req.method === 'POST') {
                 try {
-                    await this.smartthings.getInitialTokens(code);
-                    this.log.info('최초 토큰 발급 완료! Homebridge를 재시작하면 장치가 연동됩니다.');
-                    this.server.close();
+                    const payload = JSON.parse(body);
+                    if (payload.lifecycle === 'CONFIRMATION') {
+                        const confirmationUrl = payload.confirmationData.confirmationUrl;
+                        this.log.info('스마트싱스로부터 Webhook CONFIRMATION 요청을 수신했습니다. 확인 URL에 접속합니다...');
+                        this.log.info(`확인 URL: ${confirmationUrl}`);
+                        
+                        https.get(confirmationUrl, (confirmRes) => {
+                            if (confirmRes.statusCode === 200) {
+                                this.log.info('Webhook이 성공적으로 확인되었습니다!');
+                            } else {
+                                this.log.error(`Webhook 확인 실패, 상태 코드: ${confirmRes.statusCode}`);
+                            }
+                        }).on('error', (e) => {
+                            this.log.error(`Webhook 확인 요청 오류: ${e.message}`);
+                        });
+
+                        res.writeHead(200, {'Content-Type': 'application/json'});
+                        res.end(JSON.stringify({ "targetUrl": confirmationUrl }));
+                    } else {
+                        res.writeHead(200);
+                        res.end();
+                    }
                 } catch(e) {
-                    this.log.error('수신된 코드로 토큰 발급 중 오류 발생:', e.message);
+                    this.log.error('POST 요청 처리 중 오류:', e.message);
+                    res.writeHead(400);
+                    res.end();
                 }
             } else {
-                res.writeHead(400, {'Content-Type': 'text/html; charset=utf-8'});
-                res.end('<h1>인증 실패</h1><p>URL에서 인증 코드를 찾을 수 없습니다.</p>');
+                res.writeHead(404);
+                res.end();
             }
-        } else {
-            res.writeHead(404);
-            res.end();
-        }
-    }).listen(port, () => {
-        this.log.warn('====================[ 스마트싱스 인증 필요 ]====================');
-        this.log.warn(`1. 임시 인증 서버가 포트 ${port}에서 실행 중입니다.`);
-        this.log.warn('2. 아래 URL을 복사하여 웹 브라우저에서 열고, 스마트싱스에 로그인하여 권한을 허용해주세요.');
+        });
+    }).listen(listenPort, () => {
         const authUrl = `https://api.smartthings.com/oauth/authorize?client_id=${this.config.clientId}&scope=r:devices:*+w:devices:*+x:devices:*&response_type=code&redirect_uri=${this.config.redirectUri}`;
+        this.log.warn('====================[ 스마트싱스 인증 필요 ]====================');
+        this.log.warn(`1. 임시 인증 서버가 포트 ${listenPort}에서 실행 중입니다.`);
+        this.log.warn('2. 아래 URL을 복사하여 웹 브라우저에서 열고, 스마트싱스에 로그인하여 권한을 허용해주세요.');
         this.log.warn(`인증 URL: ${authUrl}`);
         this.log.warn('3. 권한 허용 후, 자동으로 인증이 처리됩니다.');
         this.log.warn('================================================================');
     });
 
-    this.server.on('error', (e) => {
-        this.log.error(`인증 서버 오류: ${e.message}`);
-    });
+    this.server.on('error', (e) => { this.log.error(`인증 서버 오류: ${e.message}`); });
   }
 
   configureAccessory(accessory) {
@@ -276,8 +309,6 @@ class SmartThingsACPlatform {
       characteristic: Characteristic.CurrentTemperature,
       getter: async () => await this.smartthings.getCurrentTemperature(deviceId),
     });
-
-
 
     this._bindCharacteristic({
       service,
