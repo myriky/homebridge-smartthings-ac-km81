@@ -8,11 +8,22 @@
         "default": "SmartThings AC",
         "required": true
       },
-      "token": {
-        "title": "SmartThings 개인용 액세스 토큰 (PAT)",
+      "clientId": {
+        "title": "SmartThings Client ID",
         "type": "string",
-        "description": "SmartThings 개발자 워크스페이스에서 발급받은 토큰. l:devices, r:devices:*, x:devices:* 권한이 필요합니다.",
+        "description": "SmartThings 개발자 워크스페이스에서 발급받은 OAuth Client ID.",
         "required": true
+      },
+      "clientSecret": {
+        "title": "SmartThings Client Secret",
+        "type": "string",
+        "description": "SmartThings 개발자 워크스페이스에서 발급받은 OAuth Client Secret.",
+        "required": true
+      },
+      "authCode": {
+        "title": "인증 코드 (1회용)",
+        "type": "string",
+        "description": "최초 인증 시 로그에 나온 URL을 통해 얻은 1회용 인증 코드를 여기에 붙여넣고 재시작하세요. 인증 성공 후에는 비워두세요."
       },
       "devices": {
         "title": "연동할 에어컨 장치",
@@ -33,7 +44,9 @@
   },
   "layout": [
     "name",
-    "token",
+    "clientId",
+    "clientSecret",
+    "authCode",
     {
       "key": "devices",
       "type": "array",
