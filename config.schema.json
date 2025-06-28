@@ -9,21 +9,21 @@
         "required": true
       },
       "clientId": {
-        "title": "SmartThings Client ID",
+        "title": "Client ID",
         "type": "string",
-        "description": "SmartThings 개발자 워크스페이스에서 발급받은 OAuth Client ID.",
+        "description": "SmartThings 개발자 워크스페이스에서 발급받은 Client ID를 입력하세요.",
         "required": true
       },
       "clientSecret": {
-        "title": "SmartThings Client Secret",
+        "title": "Client Secret",
         "type": "string",
-        "description": "SmartThings 개발자 워크스페이스에서 발급받은 OAuth Client Secret.",
+        "description": "SmartThings 개발자 워크스페이스에서 발급받은 Client Secret을 입력하세요.",
         "required": true
       },
       "authCode": {
         "title": "인증 코드 (1회용)",
         "type": "string",
-        "description": "최초 인증 시 로그에 나온 URL을 통해 얻은 1회용 인증 코드를 여기에 붙여넣고 재시작하세요. 인증 성공 후에는 비워두세요."
+        "description": "최초 인증 시 로그에 나타나는 URL을 통해 얻은 인증 코드를 여기에 붙여넣고 재시작하세요. 성공 후에는 비워두셔도 됩니다."
       },
       "devices": {
         "title": "연동할 에어컨 장치",
@@ -44,6 +44,10 @@
   },
   "layout": [
     "name",
+    {
+      "type": "help",
+      "help": "<b>OAuth 인증 설정:</b><br>1. Client ID와 Client Secret을 입력하고 Homebridge를 재시작하세요.<br>2. 로그에 출력되는 '인증 URL'을 웹 브라우저에서 여세요.<br>3. SmartThings 로그인 및 권한 허용 후, 리디렉션된 주소에서 'code=' 뒤의 값을 복사하세요.<br>4. 복사한 코드를 아래 '인증 코드' 필드에 붙여넣고 다시 재시작하면 인증이 완료됩니다."
+    },
     "clientId",
     "clientSecret",
     "authCode",
