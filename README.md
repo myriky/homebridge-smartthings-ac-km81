@@ -1,4 +1,3 @@
-Markdown
 # Homebridge SmartThings AC (KM81 Custom) v2.1.0
 
 [![npm version](https://badge.fury.io/js/homebridge-smartthings-ac-km81.svg)](https://badge.fury.io/js/homebridge-smartthings-ac-km81)
