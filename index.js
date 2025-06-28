@@ -1,11 +1,11 @@
-// index.js v2.1.1 (Webhook 인증 지원)
+// index.js v2.1.2 (Debugging Version)
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
 const pkg = require('./package.json');
 const http = require('http');
 const url = require('url');
-const https = require('https'); // https 모듈 추가
+const https = require('https');
 
 let Accessory, Service, Characteristic, UUIDGen;
 
@@ -62,8 +62,6 @@ class SmartThingsACPlatform {
         this.server.close();
     }
     
-    // config.redirectUri에서 포트와 경로를 분리해서 사용합니다.
-    // 내부 리스닝 포트는 8999로 고정하거나, 다른 방식으로 설정할 수 있습니다.
     const listenPort = 8999; 
 
     this.server = http.createServer(async (req, res) => {
@@ -71,7 +69,10 @@ class SmartThingsACPlatform {
         req.on('data', chunk => { body += chunk.toString(); });
         req.on('end', async () => {
             const reqUrl = url.parse(req.url, true);
-            const reqPath = reqUrl.pathname;
+            
+            // ▼▼▼ 디버깅용 로그 추가 ▼▼▼
+            this.log.info(`[DEBUG] 서버 요청 수신: Method=${req.method}, Path=${reqUrl.pathname}, Query=${JSON.stringify(reqUrl.query)}, Body=${body}`);
+            // ▲▲▲ 디버깅용 로그 추가 ▲▲▲
 
             // OAuth 콜백 처리 (GET 요청)
             if (req.method === 'GET') {
