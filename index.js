@@ -1,8 +1,10 @@
-// index.js v2.0.0
+// index.js v2.1.0
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
 const pkg = require('./package.json');
+const http = require('http');
+const url = require('url');
 
 let Accessory, Service, Characteristic, UUIDGen;
 
@@ -23,18 +25,18 @@ class SmartThingsACPlatform {
     this.config = config;
     this.api = api;
     this.accessories = [];
+    this.server = null;
 
     if (!config) {
       this.log.warn('설정이 없습니다. 플러그인을 비활성화합니다.');
       return;
     }
-    // OAuth 설정 확인
-    if (!config.clientId || !config.clientSecret) {
-      this.log.error('SmartThings Client ID 또는 Client Secret이 설정되지 않았습니다. config.json을 확인해주세요.');
+    if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+      this.log.error('SmartThings 인증 정보(clientId, clientSecret, redirectUri)가 설정되지 않았습니다.');
       return;
     }
     if (!config.devices || !Array.isArray(config.devices) || config.devices.length === 0) {
-      this.log.error('연동할 디바이스가 설정되지 않았습니다. config.json의 "devices" 배열을 확인해주세요.');
+      this.log.error('연동할 디바이스가 설정되지 않았습니다.');
       return;
     }
 
@@ -43,20 +45,63 @@ class SmartThingsACPlatform {
     if (this.api) {
       this.log.info('SmartThings AC 플랫폼 초기화 중...');
       this.api.on('didFinishLaunching', async () => {
-        try {
-            this.log.info('Homebridge 실행 완료. 인증 상태 확인 및 장치 검색을 시작합니다.');
-            await this.smartthings.init();
-            // 토큰이 성공적으로 로드되거나 생성된 경우에만 장치 검색
-            if (this.smartthings.tokens) {
-                await this.discoverDevices();
-            } else {
-                this.log.warn('인증이 완료되지 않아 장치 검색을 건너뜁니다. 설정을 확인하고 재시작해주세요.');
-            }
-        } catch (e) {
-            this.log.error('플러그인 초기화 중 심각한 오류 발생:', e.message);
+        this.log.info('Homebridge 실행 완료. 인증 상태 확인 및 장치 검색을 시작합니다.');
+        const hasToken = await this.smartthings.init();
+        if (hasToken) {
+            await this.discoverDevices();
+        } else {
+            this.startAuthServer();
         }
       });
     }
+  }
+
+  startAuthServer() {
+    if (this.server) {
+        this.server.close();
+    }
+    
+    const uri = new URL(this.config.redirectUri);
+    const port = uri.port;
+
+    this.server = http.createServer(async (req, res) => {
+        const reqUrl = url.parse(req.url, true);
+
+        if (reqUrl.pathname === uri.pathname) {
+            const code = reqUrl.query.code;
+            if (code) {
+                res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
+                res.end('<h1>인증 성공!</h1><p>SmartThings 인증에 성공했습니다. 이 창을 닫고 Homebridge를 재시작해주세요.</p>');
+                this.log.info('인증 코드를 성공적으로 수신했습니다. 토큰을 발급받습니다...');
+                
+                try {
+                    await this.smartthings.getInitialTokens(code);
+                    this.log.info('최초 토큰 발급 완료! Homebridge를 재시작하면 장치가 연동됩니다.');
+                    this.server.close();
+                } catch(e) {
+                    this.log.error('수신된 코드로 토큰 발급 중 오류 발생:', e.message);
+                }
+            } else {
+                res.writeHead(400, {'Content-Type': 'text/html; charset=utf-8'});
+                res.end('<h1>인증 실패</h1><p>URL에서 인증 코드를 찾을 수 없습니다.</p>');
+            }
+        } else {
+            res.writeHead(404);
+            res.end();
+        }
+    }).listen(port, () => {
+        this.log.warn('====================[ 스마트싱스 인증 필요 ]====================');
+        this.log.warn(`1. 임시 인증 서버가 포트 ${port}에서 실행 중입니다.`);
+        this.log.warn('2. 아래 URL을 복사하여 웹 브라우저에서 열고, 스마트싱스에 로그인하여 권한을 허용해주세요.');
+        const authUrl = `https://api.smartthings.com/oauth/authorize?client_id=${this.config.clientId}&scope=r:devices:*+w:devices:*+x:devices:*&response_type=code&redirect_uri=${this.config.redirectUri}`;
+        this.log.warn(`인증 URL: ${authUrl}`);
+        this.log.warn('3. 권한 허용 후, 자동으로 인증이 처리됩니다.');
+        this.log.warn('================================================================');
+    });
+
+    this.server.on('error', (e) => {
+        this.log.error(`인증 서버 오류: ${e.message}`);
+    });
   }
 
   configureAccessory(accessory) {
@@ -70,8 +115,8 @@ class SmartThingsACPlatform {
         const stDevices = await this.smartthings.getDevices();
         const configDevices = this.config.devices;
     
-        if (stDevices.length === 0) {
-            this.log.warn('SmartThings에서 어떤 장치도 찾지 못했습니다. 토큰이나 연결을 확인해주세요.');
+        if (!stDevices || stDevices.length === 0) {
+            this.log.warn('SmartThings에서 어떤 장치도 찾지 못했습니다. 권한이나 연결을 확인해주세요.');
             return;
         }
     
@@ -92,10 +137,10 @@ class SmartThingsACPlatform {
             const foundDevice = stDevices.find(stDevice => normalizeKorean(stDevice.label) === targetLabel);
     
             if (foundDevice) {
-            this.log.info(`'${configDevice.deviceLabel}' 장치를 찾았습니다. HomeKit에 추가/갱신합니다.`);
-            this.addOrUpdateAccessory(foundDevice);
+              this.log.info(`'${configDevice.deviceLabel}' 장치를 찾았습니다. HomeKit에 추가/갱신합니다.`);
+              this.addOrUpdateAccessory(foundDevice);
             } else {
-            this.log.warn(`'${configDevice.deviceLabel}'에 해당하는 장치를 SmartThings에서 찾지 못했습니다.`);
+              this.log.warn(`'${configDevice.deviceLabel}'에 해당하는 장치를 SmartThings에서 찾지 못했습니다.`);
             }
         }
     } catch(e) {
@@ -110,6 +155,7 @@ class SmartThingsACPlatform {
     if (accessory) {
       this.log.info(`기존 액세서리 갱신: ${device.label}`);
       accessory.context.device = device;
+      accessory.displayName = device.label;
     } else {
       this.log.info(`새 액세서리 등록: ${device.label}`);
       accessory = new Accessory(device.label, uuid);
@@ -230,6 +276,8 @@ class SmartThingsACPlatform {
       characteristic: Characteristic.CurrentTemperature,
       getter: async () => await this.smartthings.getCurrentTemperature(deviceId),
     });
+
+
 
     this._bindCharacteristic({
       service,
