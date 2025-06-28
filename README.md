@@ -1,3 +1,4 @@
+Markdown
 # Homebridge SmartThings AC (KM81 Custom) v2.1.0
 
 [![npm version](https://badge.fury.io/js/homebridge-smartthings-ac-km81.svg)](https://badge.fury.io/js/homebridge-smartthings-ac-km81)
@@ -32,7 +33,6 @@ SmartThings 정책 변경으로 인해, 과거에 사용되던 간단한 **개�
 Homebridge가 설치된 환경의 터미널에서 아래 명령어를 실행하여 플러그인을 설치합니다.
 ```shell
 npm install -g homebridge-smartthings-ac-km81
-
 설정 방법
 설정 과정은 2단계로 나뉩니다: 1) SmartThings CLI로 인증 정보 생성, 2) Homebridge 설정 및 인증.
 
