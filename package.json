@@ -1,7 +1,7 @@
 {
   "name": "homebridge-smartthings-ac-km81",
-  "version": "1.1.2",
-  "description": "SmartThings 에어컨을 HomeKit에 연동하는 고기능 커스텀 플러그인",
+  "version": "2.0.0",
+  "description": "SmartThings 에어컨을 HomeKit에 연동하는 고기능 커스텀 플러그인 (OAuth2 지원)",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -16,6 +16,7 @@
     "airconditioner",
     "samsung",
     "ac",
+    "oauth2",
     "korean",
     "km81"
   ],
