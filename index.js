@@ -1,4 +1,4 @@
-// index.js v2.1.9
+// index.js v2.2.0
 
 'use strict';
 
