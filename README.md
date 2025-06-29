@@ -1,46 +1,118 @@
-# Homebridge SmartThings AC (KM81 Custom) v2.1.6
+물론입니다. 제공해주신 코드의 현재 기능과 동작 방식을 기반으로, 다른 사용자들이 쉽게 이해하고 사용할 수 있도록 상세한 `README.md` 파일을 작성해 드리겠습니다.
 
-[![npm version](https://badge.fury.io/js/homebridge-smartthings-ac-km81.svg)](https://badge.fury.io/js/homebridge-smartthings-ac-km81)
+아래 내용을 복사하여 GitHub의 `README.md` 파일에 붙여넣으시면 됩니다.
 
-`homebridge-smartthings-ac-km81`은 삼성 에어컨을 SmartThings API를 통해 HomeKit에 연동하기 위한 Homebridge 플러그인입니다. v2.1.0부터 **OAuth2 자동 인증**을 지원하여, 한 번의 설정으로 토큰 만료 없이 안정적으로 사용할 수 있습니다.
+-----
 
-## 이 플러그인을 선택해야 하는 이유
+# Homebridge SmartThings AC (KM81)
 
-SmartThings 정책 변경으로 인해, 과거에 사용되던 간단한 **개인용 액세스 토큰(PAT)** 방식은 24시간마다 만료되어 매일 재인증이 필요한 문제가 발생합니다. 또한, **SmartThings 개발자 웹사이트**를 통해 OAuth 앱을 생성하는 방법은 Webhook 소유권 인증이라는 해결 불가능한 단계에 막히게 됩니다.
+[](https://www.google.com/search?q=https://ko-fi.com/B0B11K13X5)
 
-이 플러그인은 현재 시점에서 개인이 안정적으로 토큰 자동 갱신을 구현할 수 있는, **SmartThings CLI를 이용한 OAuth2 인증 방식을 채택**하여 이러한 문제들을 모두 해결했습니다.
+삼성 시스템 에어컨을 SmartThings API를 통해 HomeKit에 연동하기 위한 Homebridge 플러그인입니다. 이 플러그인은 HomeKit 환경에서 에어컨을 더 단순하고 직관적으로 사용하고자 하는 목적에 맞춰져 있으며, 특히 **냉방/제습 위주의 사용**에 최적화되어 있습니다.
 
 ## 주요 기능
 
-* **안정적인 자동 인증**: SmartThings CLI로 인증 정보를 생성하고, 플러그인의 내장 서버가 콜백을 자동으로 처리하여 사용자가 코드를 복사/붙여넣기 할 필요 없이 편리하게 인증할 수 있습니다.
-* **다중 디바이스 지원**: 여러 대의 에어컨을 `config.json`에 등록하여 한 번에 관리할 수 있습니다.
-* **상세한 상태 반영**: SmartThings 에어컨의 실제 운전 모드를 분석하여 홈 앱의 상태에 정확하게 반영합니다.
-* **고유 기능 커스텀 매핑**:
-    * 홈 앱의 **'냉방'** 버튼 → 실제 에어컨의 **'제습(dry)'** 모드 실행
-    * 홈 앱의 **'스윙'** 토글 → 실제 에어컨의 **'무풍(Wind-Free)'** 기능 제어
-    * 홈 앱의 **'잠금'** 토글 → 실제 에어컨의 **'자동 청소'** 기능 제어
-* **안정적인 API 통신**: API 요청을 효율적으로 관리하고 캐싱하여, 서버의 과도한 요청(Rate Limit) 오류를 방지합니다.
-* **GUI 설정 지원**: Homebridge UI 환경에서 설정을 쉽게 입력하고 관리할 수 있습니다.
+  * **HomeKit을 통한 삼성 시스템 에어컨 제어**: 전원, 온도 설정 등 기본적인 제어가 가능합니다.
+  * **단순화된 제어 모드**: HomeKit UI의 복잡성을 줄이기 위해 제어 모드를 \*\*'냉방'과 '끔'\*\*으로 제한했습니다. '난방' 및 '자동' 모드는 UI에 표시되지 않습니다.
+  * **제습 모드 연동**: HomeKit에서 '냉방' 모드를 선택하면, 실제 에어컨은 **'제습(Dry)' 모드로 동작**합니다. 여름철 습도 관리에 유용합니다.
+  * **통합된 '냉방 중' 상태**: 에어컨의 실제 동작 모드(냉방, 제습, 송풍 등)와 관계없이, \*\*전원이 켜져 있다면 HomeKit에서는 항상 '냉방 중'\*\*으로 상태가 표시됩니다.
+  * **부가 기능 지원**:
+      * **무풍 모드**: HomeKit의 '스윙' 기능으로 켜고 끌 수 있습니다.
+      * **자동 건조 모드**: HomeKit의 '물리 제어 잠금' 기능으로 켜고 끌 수 있습니다.
+  * **안전한 인증**: SmartThings의 공식 OAuth 2.0 인증 방식을 사용하여 안전하게 계정을 연동합니다.
+  * **간편한 최초 인증**: 플러그인이 로컬 인증 서버를 잠시 구동하여 복잡한 과정 없이 토큰을 발급받을 수 있습니다.
 
 ## 사전 준비
 
-* 정상적으로 실행 중인 Homebridge 환경
-* Node.js 및 npm이 설치된 터미널 환경 (PC/Mac의 터미널, 또는 GitHub Codespaces)
+1.  [Homebridge](https://homebridge.io/)가 설치되어 있어야 합니다. (Homebridge UI 사용을 권장합니다.)
+2.  Node.js 16.x 이상 버전이 필요합니다.
+3.  SmartThings 계정이 있어야 하며, 제어하려는 에어컨이 SmartThings 앱에 정상적으로 등록되어 있어야 합니다.
 
 ## 설치
 
-Homebridge가 설치된 환경의 터미널에서 아래 명령어를 실행하여 플러그인을 설치합니다.
+Homebridge UI의 '플러그인' 탭에서 `homebridge-smartthings-ac-km81`을 검색하여 설치하거나, 터미널에서 아래 명령어를 직접 실행합니다.
 
-```shell
+```sh
 npm install -g homebridge-smartthings-ac-km81
+```
 
-설정 방법
-설정 과정은 2단계로 나뉩니다: 1) SmartThings CLI로 인증 정보 생성, 2) Homebridge 설정 및 인증.
+## 설정
 
-1단계: SmartThings CLI로 Client ID 및 Secret 생성하기
+### 1\. SmartThings API Key 발급
 
-이 단계는 PC/Mac의 터미널이나, 아이패드만 있는 경우 GitHub Codespaces 환경에서 진행합니다.
+Homebridge 설정에 필요한 `clientId`와 `clientSecret`을 발급받아야 합니다.
 
-SmartThings CLI 설치 (최초 1회):
+1.  [SmartThings Developer Workspace](https://www.google.com/search?q=https://smartthings.developer.samsung.com/workspace/)에 접속하여 로그인합니다.
+2.  **'New project'** 버튼을 클릭합니다.
+3.  \*\*'Automation for the SmartThings App'\*\*을 선택하고 \*\*'OK'\*\*를 누릅니다.
+4.  프로젝트 이름을 입력합니다. (예: `Homebridge AC Control`)
+5.  프로젝트가 생성되면, 왼쪽 메뉴에서 \*\*'App Credentials'\*\*를 선택합니다.
+      * **Client ID**와 **Client Secret**을 복사하여 안전한 곳에 잠시 보관합니다.
+6.  왼쪽 메뉴에서 \*\*'App Scopes'\*\*를 선택합니다.
+      * `devices` 항목을 찾아 **View(r), Control(w), Command(x)** 3가지 권한을 모두 체크합니다. (`r:devices:*`, `w:devices:*`, `x:devices:*`)
+7.  왼쪽 메뉴에서 \*\*'App Settings'\*\*를 선택합니다.
+      * **'Hosted by'** 섹션에서 \*\*'Non-SmartThings Cloud (3rd-party)'\*\*를 선택합니다.
+      * **'Redirect URIs'** 항목에 **`http://<HOMEBRIDGE_IP_ADDRESS>:8999`** 형식의 주소를 추가하고 \*\*'Save'\*\*를 누릅니다.
+          * `<HOMEBRIDGE_IP_ADDRESS>`는 Homebridge가 설치된 서버의 IP 주소로 변경해야 합니다. (예: `http://192.168.1.10:8999`)
+8.  마지막으로 오른쪽 상단의 **'Save'** 버튼을 눌러 프로젝트 전체 설정을 저장합니다.
 
-npm install -g @smartthings/cli
+### 2\. Homebridge `config.json` 설정
+
+Homebridge UI의 설정 화면 또는 `config.json` 파일을 직접 수정하여 아래 내용을 추가합니다.
+
+```json
+{
+  "platform": "SmartThingsAC-KM81",
+  "name": "SmartThingsAC-KM81",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "redirectUri": "http://<HOMEBRIDGE_IP_ADDRESS>:8999",
+  "devices": [
+    {
+      "deviceLabel": "거실 에어컨"
+    },
+    {
+      "deviceLabel": "안방 에어컨"
+    }
+  ]
+}
+```
+
+  * **`clientId`**: 1단계에서 발급받은 Client ID를 입력합니다.
+  * **`clientSecret`**: 1단계에서 발급받은 Client Secret을 입력합니다.
+  * **`redirectUri`**: 1단계에서 설정한 Redirect URI를 **동일하게** 입력합니다.
+  * **`devices`**: HomeKit에 추가할 에어컨 목록입니다.
+      * **`deviceLabel`**: **SmartThings 앱에 표시되는 에어컨의 이름과 정확히 일치**해야 합니다. 오타나 띄어쓰기가 다를 경우 장치를 찾지 못합니다.
+
+### 3\. 플러그인 최초 인증
+
+1.  설정 저장이 완료되면 Homebridge를 **재시작**합니다.
+2.  Homebridge 로그(Log)를 확인하면, **`[스마트싱스 인증 필요]`** 라는 문구와 함께 인증 URL이 나타납니다.
+3.  로그에 표시된 `인증 URL` 전체를 복사하여 웹 브라우저 주소창에 붙여넣고 접속합니다.
+4.  SmartThings 계정으로 로그인하고, 생성한 앱에 대한 권한을 **'허용(Authorize)'** 합니다.
+5.  "인증 성공\!" 메시지가 브라우저에 표시되면 정상적으로 완료된 것입니다.
+6.  다시 Homebridge를 **재시작**하면 플러그인이 에어컨 장치를 인식하고 HomeKit에 추가합니다.
+
+## 상세 기능 설명
+
+| HomeKit 기능             | 실제 에어컨 동작                                                                                             | 비고                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| **상태** (State)         | 꺼짐: `비활성(Inactive)` \<br\> 켜짐: `냉방 중(Cooling)`                                                        | 에어컨이 켜져 있으면 실제 모드(냉방, 제습, 송풍 등)와 관계없이 항상 '냉방 중'으로 표시됩니다.       |
+| **모드** (Mode)          | UI에 '냉방(Cool)'만 표시 \<br\> '냉방' 선택 시 `제습(Dry)` 모드로 설정                                          | 난방/자동 모드는 UI에서 제거되어 선택할 수 없습니다.                                               |
+| **온도 설정** (Temperature)  | 희망 온도(18°C \~ 30°C) 설정                                                                                  | 일반적인 온도 제어와 동일합니다.                                                                   |
+| **스윙** (Swing)         | 켜짐: `무풍(Wind-Free)` 모드 On \<br\> 꺼짐: `무풍(Wind-Free)` 모드 Off                                             | HomeKit의 스윙 토글을 이용해 무풍 모드를 제어합니다.                                               |
+| **물리 제어 잠금** (Lock)  | 켜짐: `자동 건조(Auto Clean)` 모드 On \<br\> 꺼짐: `자동 건조(Auto Clean)` 모드 Off                              | HomeKit의 부가 기능 토글을 재활용하여 자동 건조 기능을 제어합니다.                                 |
+
+## 문제 해결 (Troubleshooting)
+
+  * **"장치를 찾지 못했습니다" 로그가 표시될 경우:**
+
+      * `config.json`의 `deviceLabel`이 SmartThings 앱의 장치 이름과 **완전히 동일한지** 확인하세요. (띄어쓰기 포함)
+      * SmartThings API Key 발급 시 **'devices' 관련 권한 3가지**를 모두 체크했는지 확인하세요.
+
+  * **인증이 실패하거나 "invalid\_grant" 오류가 발생할 경우:**
+
+      * `config.json`의 `clientId`, `clientSecret`, `redirectUri` 값이 올바르게 입력되었는지 다시 한번 확인하세요.
+      * Homebridge 서버가 실행 중인 기기의 방화벽이 `8999` 포트를 차단하고 있지 않은지 확인하세요.
+
+-----
