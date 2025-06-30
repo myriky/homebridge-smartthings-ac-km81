@@ -1,4 +1,4 @@
-// index.js v2.2.4
+// index.js v2.2.5
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -96,8 +96,6 @@ class SmartThingsACPlatform {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ "targetUrl": confirmationUrl }));
             } else {
-                // 실시간 상태 업데이트를 위한 PUSH 이벤트 처리 로직 (향후 확장 가능)
-                // if(payload.lifecycle === 'EVENT') { ... }
                 res.writeHead(200);
                 res.end();
             }
@@ -121,11 +119,9 @@ class SmartThingsACPlatform {
             req.on('end', async () => {
                 const reqUrl = url.parse(req.url, true);
                 
-                // redirectUri의 경로와 일치하는 경우에만 OAuth 콜백 처리
                 if (req.method === 'GET' && reqUrl.pathname === new url.URL(this.config.redirectUri).pathname) {
                     await this._handleOAuthCallback(req, res, reqUrl);
                 } else if (req.method === 'POST') {
-                    // SmartThings Webhook은 어떤 경로로든 POST 요청을 보낼 수 있음
                     this._handleWebhookConfirmation(req, res, body);
                 } else {
                     res.writeHead(404, {'Content-Type': 'text/plain'});
@@ -215,10 +211,11 @@ class SmartThingsACPlatform {
             this.accessories.push(accessory);
         }
 
+        // --- 요청하신 대로 이 부분을 이전 하드코딩된 값으로 원복합니다 ---
         accessory.getService(Service.AccessoryInformation)
             .setCharacteristic(Characteristic.Manufacturer, 'Samsung')
-            .setCharacteristic(Characteristic.Model, device.deviceTypeId || 'Unknown')
-            .setCharacteristic(Characteristic.SerialNumber, device.deviceId)
+            .setCharacteristic(Characteristic.Model, 'AW06C7155WWA')
+            .setCharacteristic(Characteristic.SerialNumber, '0LC5PDOY601505H')
             .setCharacteristic(Characteristic.FirmwareRevision, pkg.version);
 
         this.setupHeaterCoolerService(accessory);
@@ -262,7 +259,6 @@ class SmartThingsACPlatform {
         const service = accessory.getService(Service.HeaterCooler) ||
             accessory.addService(Service.HeaterCooler, accessory.displayName);
         
-        // Active (전원)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.Active,
@@ -270,7 +266,6 @@ class SmartThingsACPlatform {
             setter: (value) => this.smartthings.setPower(deviceId, value === 1),
         });
 
-        // Current State (현재 상태)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.CurrentHeaterCoolerState,
@@ -278,33 +273,28 @@ class SmartThingsACPlatform {
                 if (!await this.smartthings.getPower(deviceId)) {
                     return Characteristic.CurrentHeaterCoolerState.INACTIVE;
                 }
-                // 냉방/제습/송풍 등 켜져 있는 모든 상태를 COOLING으로 표시
                 return Characteristic.CurrentHeaterCoolerState.COOLING;
             },
         });
 
-        // Target State (목표 상태)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.TargetHeaterCoolerState,
             props: { validValues: [Characteristic.TargetHeaterCoolerState.COOL] },
-            getter: () => Characteristic.TargetHeaterCoolerState.COOL, // 항상 COOL 모드로 고정
+            getter: () => Characteristic.TargetHeaterCoolerState.COOL,
             setter: async (value) => {
-                // HomeKit에서 COOL을 선택하면 'dry' 모드로 설정
                 if (value === Characteristic.TargetHeaterCoolerState.COOL) {
                     await this.smartthings.setMode(deviceId, 'dry');
                 }
             },
         });
 
-        // Current Temperature (현재 온도)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.CurrentTemperature,
             getter: () => this.smartthings.getCurrentTemperature(deviceId),
         });
 
-        // Cooling Threshold (목표 온도)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.CoolingThresholdTemperature,
@@ -313,7 +303,6 @@ class SmartThingsACPlatform {
             setter: (value) => this.smartthings.setTemperature(deviceId, value),
         });
 
-        // Swing Mode (무풍)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.SwingMode,
@@ -321,7 +310,6 @@ class SmartThingsACPlatform {
             setter: (value) => this.smartthings.setWindFree(deviceId, value === 1),
         });
 
-        // Lock Physical Controls (자동 건조)
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.LockPhysicalControls,
