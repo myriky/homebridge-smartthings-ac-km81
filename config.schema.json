@@ -1,4 +1,6 @@
 {
+  "pluginAlias": "SmartThings-AC-Km81",
+  "pluginType": "platform",
   "schema": {
     "type": "object",
     "properties": {
