@@ -1,5 +1,3 @@
-// config.schema.json v2.2.3
-
 {
   "pluginAlias": "SmartThingsAC-KM81",
   "pluginType": "platform",
