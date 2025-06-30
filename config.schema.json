@@ -1,5 +1,6 @@
+// config.schema.json v2.2.3
 {
-  "pluginAlias": "SmartThings-AC-Km81",
+  "pluginAlias": "SmartThingsAC-KM81",
   "pluginType": "platform",
   "schema": {
     "type": "object",
@@ -13,19 +14,19 @@
       "clientId": {
         "title": "Client ID",
         "type": "string",
-        "description": "SmartThings CLI로 발급받은 Client ID를 입력하세요.",
+        "description": "SmartThings Developer Workspace에서 발급받은 Client ID를 입력하세요.",
         "required": true
       },
       "clientSecret": {
         "title": "Client Secret",
         "type": "string",
-        "description": "SmartThings CLI로 발급받은 Client Secret을 입력하세요.",
+        "description": "SmartThings Developer Workspace에서 발급받은 Client Secret을 입력하세요.",
         "required": true
       },
       "redirectUri": {
         "title": "Redirect URI",
         "type": "string",
-        "description": "CLI 앱 생성 시 입력했던 Redirect URI와 동일한 값을 입력하세요.",
+        "description": "앱 생성 시 입력했던 Redirect URI와 동일한 값을 입력하세요. (예: http://<Homebridge IP>:8999/oauth/callback)",
         "default": "http://localhost:8999/oauth/callback",
         "required": true
       },
