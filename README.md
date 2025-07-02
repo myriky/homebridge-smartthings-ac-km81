@@ -1,8 +1,3 @@
-## Homebridge SmartThings AC (KM81) README.md
-
-네, 알겠습니다. 아래 내용을 전체 복사하여 `README.md` 파일에 바로 붙여넣으실 수 있도록 마크다운 형식으로 제공해 드립니다.
-
-````markdown
 # Homebridge SmartThings AC (KM81)
 
 삼성 시스템 에어컨을 SmartThings API를 통해 HomeKit에 연동하기 위한 Homebridge 플러그인입니다. 이 플러그인은 HomeKit 환경에서 에어컨을 더 단순하고 직관적으로 사용하고자 하는 목적에 맞춰져 있으며, 특히 **냉방/제습 위주의 사용**에 최적화되어 있습니다.
