@@ -1,4 +1,4 @@
-// index.js v2.2.7
+// index.js v2.2.8
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
@@ -31,11 +31,7 @@ class SmartThingsACPlatform {
         this.accessories = [];
         this.server = null;
 
-        if (!config) {
-            this.log.warn('설정이 없습니다. 플러그인을 비활성화합니다.');
-            return;
-        }
-        if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+        if (!config || !config.clientId || !config.clientSecret || !config.redirectUri) {
             this.log.error('SmartThings 인증 정보(clientId, clientSecret, redirectUri)가 설정되지 않았습니다.');
             return;
         }
@@ -58,6 +54,44 @@ class SmartThingsACPlatform {
                 }
             });
         }
+    }
+
+    // ... (startAuthServer, configureAccessory 등 기존 코드는 변경 없음) ...
+    startAuthServer() {
+        if (this.server) {
+            this.server.close();
+        }
+
+        const listenPort = new url.URL(this.config.redirectUri).port || 8999;
+
+        this.server = http.createServer(async (req, res) => {
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', async () => {
+                const reqUrl = url.parse(req.url, true);
+                
+                if (req.method === 'GET' && reqUrl.pathname === new url.URL(this.config.redirectUri).pathname) {
+                    await this._handleOAuthCallback(req, res, reqUrl);
+                } else if (req.method === 'POST') {
+                    this._handleWebhookConfirmation(req, res, body);
+                } else {
+                    res.writeHead(404, {'Content-Type': 'text/plain'});
+                    res.end('Not Found');
+                }
+            });
+        }).listen(listenPort, () => {
+            const scope = 'r:devices:* w:devices:* x:devices:*';
+            const authUrl = `https://api.smartthings.com/oauth/authorize?client_id=${this.config.clientId}&scope=${encodeURIComponent(scope)}&response_type=code&redirect_uri=${encodeURIComponent(this.config.redirectUri)}`;
+
+            this.log.warn('====================[ 스마트싱스 인증 필요 ]====================');
+            this.log.warn(`1. 임시 인증 서버가 포트 ${listenPort}에서 실행 중입니다.`);
+            this.log.warn('2. 아래 URL을 복사하여 웹 브라우저에서 열고, 스마트싱스에 로그인하여 권한을 허용해주세요.');
+            this.log.warn(`인증 URL: ${authUrl}`);
+            this.log.warn('3. 권한 허용 후, 자동으로 인증이 처리됩니다.');
+            this.log.warn('================================================================');
+        });
+
+        this.server.on('error', (e) => { this.log.error(`인증 서버 오류: ${e.message}`); });
     }
 
     async _handleOAuthCallback(req, res, reqUrl) {
@@ -106,62 +140,12 @@ class SmartThingsACPlatform {
         }
     }
 
-    startAuthServer() {
-        if (this.server) {
-            this.server.close();
-        }
-
-        const listenPort = new url.URL(this.config.redirectUri).port || 8999;
-
-        this.server = http.createServer(async (req, res) => {
-            let body = '';
-            req.on('data', chunk => { body += chunk.toString(); });
-            req.on('end', async () => {
-                const reqUrl = url.parse(req.url, true);
-                
-                if (req.method === 'GET' && reqUrl.pathname === new url.URL(this.config.redirectUri).pathname) {
-                    await this._handleOAuthCallback(req, res, reqUrl);
-                } else if (req.method === 'POST') {
-                    this._handleWebhookConfirmation(req, res, body);
-                } else {
-                    res.writeHead(404, {'Content-Type': 'text/plain'});
-                    res.end('Not Found');
-                }
-            });
-        }).listen(listenPort, () => {
-            const scope = 'r:devices:* w:devices:* x:devices:*';
-            const authUrl = `https://api.smartthings.com/oauth/authorize?client_id=${this.config.clientId}&scope=${encodeURIComponent(scope)}&response_type=code&redirect_uri=${encodeURIComponent(this.config.redirectUri)}`;
-
-            this.log.warn('====================[ 스마트싱스 인증 필요 ]====================');
-            this.log.warn(`1. 임시 인증 서버가 포트 ${listenPort}에서 실행 중입니다.`);
-            this.log.warn('2. 아래 URL을 복사하여 웹 브라우저에서 열고, 스마트싱스에 로그인하여 권한을 허용해주세요.');
-            this.log.warn(`인증 URL: ${authUrl}`);
-            this.log.warn('3. 권한 허용 후, 자동으로 인증이 처리됩니다.');
-            this.log.warn('================================================================');
-        });
-
-        this.server.on('error', (e) => { this.log.error(`인증 서버 오류: ${e.message}`); });
-    }
-
     configureAccessory(accessory) {
         this.log.info(`캐시된 액세서리 불러오기: ${accessory.displayName}`);
         this.accessories.push(accessory);
     }
-
-    _filterUnusedAccessories(configDevices) {
-        return this.accessories.filter(acc =>
-            !configDevices.some(conf => normalizeKorean(conf.deviceLabel) === normalizeKorean(acc.displayName))
-        );
-    }
-
-    _removeAccessories(accessoriesToRemove) {
-        if (accessoriesToRemove.length > 0) {
-            this.log.info(`${accessoriesToRemove.length}개의 사용하지 않는 액세서리를 제거합니다.`);
-            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
-            this.accessories = this.accessories.filter(acc => !accessoriesToRemove.includes(acc));
-        }
-    }
-
+    
+    // _syncDevices 함수 수정: configDevice 전달
     _syncDevices(stDevices, configDevices) {
         for (const configDevice of configDevices) {
             const targetLabel = normalizeKorean(configDevice.deviceLabel);
@@ -169,7 +153,7 @@ class SmartThingsACPlatform {
 
             if (foundDevice) {
                 this.log.info(`'${configDevice.deviceLabel}' 장치를 찾았습니다. HomeKit에 추가/갱신합니다.`);
-                this.addOrUpdateAccessory(foundDevice);
+                this.addOrUpdateAccessory(foundDevice, configDevice); // configDevice 전달
             } else {
                 this.log.warn(`'${configDevice.deviceLabel}'에 해당하는 장치를 SmartThings에서 찾지 못했습니다.`);
             }
@@ -185,9 +169,7 @@ class SmartThingsACPlatform {
                 return;
             }
             this.log.info(`총 ${stDevices.length}개의 SmartThings 장치를 발견했습니다. 설정된 장치와 비교합니다.`);
-
-            const accessoriesToRemove = this._filterUnusedAccessories(this.config.devices);
-            this._removeAccessories(accessoriesToRemove);
+            
             this._syncDevices(stDevices, this.config.devices);
 
         } catch (e) {
@@ -195,7 +177,8 @@ class SmartThingsACPlatform {
         }
     }
 
-    addOrUpdateAccessory(device) {
+    // addOrUpdateAccessory 함수 수정: configDevice 파라미터 추가 및 정보 설정
+    addOrUpdateAccessory(device, configDevice) {
         const uuid = UUIDGen.generate(device.deviceId);
         let accessory = this.accessories.find(acc => acc.UUID === uuid);
 
@@ -211,16 +194,16 @@ class SmartThingsACPlatform {
             this.accessories.push(accessory);
         }
 
-        // --- 요청하신 대로 이 부분을 이전 하드코딩된 값으로 원복합니다 ---
         accessory.getService(Service.AccessoryInformation)
             .setCharacteristic(Characteristic.Manufacturer, 'Samsung')
-            .setCharacteristic(Characteristic.Model, 'AW06C7155WWA')
-            .setCharacteristic(Characteristic.SerialNumber, '0LC5PDOY601505H')
+            .setCharacteristic(Characteristic.Model, configDevice.model || 'AC-Model')
+            .setCharacteristic(Characteristic.SerialNumber, configDevice.serialNumber || device.deviceId)
             .setCharacteristic(Characteristic.FirmwareRevision, pkg.version);
 
         this.setupHeaterCoolerService(accessory);
     }
 
+    // ... (setupHeaterCoolerService, _bindCharacteristic 등 나머지 코드는 변경 없음) ...
     _bindCharacteristic({ service, characteristic, props, getter, setter }) {
         const char = service.getCharacteristic(characteristic);
 
