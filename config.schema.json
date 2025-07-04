@@ -41,6 +41,16 @@
               "type": "string",
               "description": "SmartThings 앱에 등록된 에어컨의 이름과 정확히 일치해야 합니다.",
               "required": true
+            },
+            "model": {
+              "title": "모델명 (선택 사항)",
+              "type": "string",
+              "description": "홈 앱에 표시될 모델명을 입력합니다."
+            },
+            "serialNumber": {
+              "title": "일련번호 (선택 사항)",
+              "type": "string",
+              "description": "홈 앱에 표시될 일련번호를 입력합니다."
             }
           }
         }
@@ -61,7 +71,9 @@
       "type": "array",
       "title": "에어컨 목록",
       "items": [
-        "devices[].deviceLabel"
+        "devices[].deviceLabel",
+        "devices[].model",
+        "devices[].serialNumber"
       ]
     }
   ]
