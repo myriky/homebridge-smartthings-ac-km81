@@ -1,4 +1,4 @@
-// index.js v2.2.8
+// index.js v2.3.0
 'use strict';
 
 const SmartThings = require('./lib/SmartThings');
