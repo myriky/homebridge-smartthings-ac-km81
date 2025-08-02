@@ -1,0 +1,28 @@
+# Git 관련
+.git/
+.gitignore
+
+# 개발 도구
+.DS_Store
+.vscode/
+.idea/
+
+# 로그 파일
+*.log
+npm-debug.log*
+
+# 테스트 관련
+coverage/
+.nyc_output/
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 환경 설정
+.env
+.env.local
+.env.*.local
+
+# 토큰 파일 (보안상 제외)
+smartthings_ac_token.json 

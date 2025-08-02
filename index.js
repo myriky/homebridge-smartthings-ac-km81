@@ -267,7 +267,7 @@ class SmartThingsACPlatform {
             getter: () => Characteristic.TargetHeaterCoolerState.COOL,
             setter: async (value) => {
                 if (value === Characteristic.TargetHeaterCoolerState.COOL) {
-                    await this.smartthings.setMode(deviceId, 'dry');
+                    await this.smartthings.setMode(deviceId, 'auto');
                 }
             },
         });
@@ -281,7 +281,7 @@ class SmartThingsACPlatform {
         this._bindCharacteristic({
             service,
             characteristic: Characteristic.CoolingThresholdTemperature,
-            props: { minValue: 18, maxValue: 30, minStep: 1 },
+            props: { minValue: 18, maxValue: 30, minStep: 0.5 },
             getter: () => this.smartthings.getCoolingSetpoint(deviceId),
             setter: (value) => this.smartthings.setTemperature(deviceId, value),
         });
