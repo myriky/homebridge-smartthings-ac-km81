@@ -267,7 +267,7 @@ class SmartThingsACPlatform {
             getter: () => Characteristic.TargetHeaterCoolerState.COOL,
             setter: async (value) => {
                 if (value === Characteristic.TargetHeaterCoolerState.COOL) {
-                    await this.smartthings.setMode(deviceId, 'auto');
+                    await this.smartthings.setMode(deviceId, 'cool');
                 }
             },
         });
